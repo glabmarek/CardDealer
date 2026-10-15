@@ -6,5 +6,3 @@ Roadmap for automatic card dealer:
 16-29.11 -> Making final project casing (3D print if possible, otherwise made with other materials by hand)
 1-11.12 -> Creating mobile connection for card dealing management
 12-18.12 -> last tests and prototype completion
-
-This roadmap assumes semi-optimistic scenario of ceirtain milestones completion timings. If anything gets delayed, mobile connection gets moved into next year to january.
