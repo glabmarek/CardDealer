@@ -1,0 +1,4 @@
+Main features:
+1. Card dealing (pulling a card and dealing it to a player)
+2. Base rotation (rotating to players for dealing a card)
+3. Mobile connection (for selecting amount of players, their position, amount of cards dealt and later burned/dealed for certain games all setup by a game admin. Multiple device connection for a deal button for each player)

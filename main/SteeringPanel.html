@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ESP32 Poker Dealer</title>
+    <style>
+        :root {
+            --bg-base: #000000;
+            --bg-surface: rgba(28, 28, 30, 0.85);
+            --bg-elevated: rgba(44, 44, 46, 0.75);
+            --bg-input: rgba(118, 118, 128, 0.2);
+            
+            --text-primary: #ffffff;
+            --text-secondary: rgba(235, 235, 245, 0.6);
+            --text-muted: rgba(235, 235, 245, 0.35);
+            
+            --amber-primary: #ff9f0a;
+            --amber-dim: rgba(255, 159, 10, 0.18);
+            --blue-board: #64d2ff;
+            --purple-burn: #bf5af2;
+            --red-alert: #ff453a;
+            --red-dim: rgba(255, 69, 58, 0.18);
+
+            --radius-large: 42px;   
+            --radius-medium: 24px;  
+            --radius-small: 18px;   
+            --radius-pill: 9999px;  
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            padding: calc(14px + env(safe-area-inset-top, 0px)) 14px calc(14px + env(safe-area-inset-bottom, 0px)) 14px;
+            letter-spacing: -0.2px;
+        }
+
+        .mono {
+            font-family: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+        }
+
+        main {
+            flex: 1;
+            width: 100%;
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        @media (min-width: 768px) {
+            main {
+                display: grid;
+                grid-template-columns: 1fr 380px;
+                padding: 10px;
+                gap: 18px;
+            }
+        }
+
+        .panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border-radius: var(--radius-large);
+            border: none;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+        }
+
+        .panel-header {
+            padding: 18px 22px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .panel-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+
+        .radar-box {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            max-height: 420px;
+            margin: 0 auto;
+            touch-action: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            display: block;
+        }
+
+        button {
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+            cursor: pointer;
+            border-radius: var(--radius-medium);
+            border: none;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            padding: 12px 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            user-select: none;
+            transition: transform 0.12s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.12s ease, background 0.15s ease;
+        }
+
+        button:active {
+            transform: scale(0.96);
+            opacity: 0.85;
+        }
+
+        button.btn-primary {
+            background: var(--amber-primary);
+            color: #000;
+            font-weight: 700;
+        }
+
+        button.btn-danger {
+            background: var(--red-dim);
+            color: var(--red-alert);
+        }
+
+        .table-controls {
+            padding: 14px 18px;
+            display: flex;
+            gap: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .table-controls button {
+            flex: 1;
+            height: 48px;
+        }
+
+        .poker-shortcuts-container {
+            padding: 12px 18px 16px 18px;
+        }
+
+        .poker-streets-bar {
+            background: rgba(118, 118, 128, 0.2);
+            border-radius: var(--radius-medium);
+            padding: 4px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .btn-street {
+            font-size: 12px;
+            padding: 10px 4px;
+            border-radius: 20px;
+            background: transparent;
+            color: var(--text-primary);
+        }
+
+        .btn-street:active {
+            background: rgba(255, 255, 255, 0.15);
+            transform: scale(0.98);
+        }
+
+        .side-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .form-group {
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .form-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .counter-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-input);
+            border-radius: var(--radius-medium);
+            padding: 5px;
+        }
+
+        .btn-qty {
+            width: 38px;
+            height: 38px;
+            font-size: 18px;
+            border-radius: var(--radius-small);
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }
+
+        .poker-toggles {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .poker-toggles button {
+            border-radius: var(--radius-medium);
+            font-size: 12px;
+            height: 44px;
+        }
+
+        .btn-toggle-active {
+            background: var(--amber-dim) !important;
+            color: var(--amber-primary) !important;
+            border: 1px solid rgba(255, 159, 10, 0.3) !important;
+        }
+
+        .player-list {
+            display: flex;
+            flex-direction: column;
+            min-height: 290px;
+            background: rgba(0, 0, 0, 0.15);
+        }
+
+        .player-row {
+            padding: 12px 18px;
+            display: grid;
+            grid-template-columns: 38px 1fr 78px 72px;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .player-badge {
+            width: 34px;
+            height: 34px;
+            border-radius: var(--radius-small);
+            background: var(--amber-dim);
+            color: var(--amber-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .player-badge.burn {
+            background: rgba(191, 90, 242, 0.2);
+            color: var(--purple-burn);
+        }
+
+        .player-badge.board {
+            background: rgba(100, 210, 255, 0.2);
+            color: var(--blue-board);
+        }
+
+        .custom-card-qty {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-input);
+            padding: 4px 8px;
+            border-radius: var(--radius-small);
+        }
+
+        .btn-mini {
+            width: 24px;
+            height: 24px;
+            font-size: 13px;
+            padding: 0;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-fire {
+            background: var(--bg-input);
+            color: var(--amber-primary);
+            font-size: 12px;
+            padding: 8px 12px;
+            border-radius: var(--radius-small);
+        }
+
+        .terminal-box {
+            padding: 14px 18px;
+            background: rgba(0, 0, 0, 0.35);
+            font-family: "SF Mono", ui-monospace, Menlo, monospace;
+            font-size: 11px;
+            color: var(--text-secondary);
+            min-height: 65px;
+            max-height: 85px;
+            overflow-y: auto;
+            line-height: 1.45;
+        }
+
+        .badge-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 14px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-pill);
+            font-size: 11px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+    <main>
+        <section class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Table Radar</span>
+                <span class="mono badge-pill" style="color: var(--amber-primary);" id="turretTracker">0° / 0 steps</span>
+            </div>
+
+            <div class="radar-box">
+                <canvas id="tableCanvas"></canvas>
+            </div>
+
+            <div class="poker-shortcuts-container">
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 6px;">
+                    Poker Shortcuts
+                </div>
+                <div class="poker-streets-bar">
+                    <button class="btn-street" onclick="executeStreet('preflop')">Pre-Flop</button>
+                    <button class="btn-street" onclick="executeStreet('flop')">Flop</button>
+                    <button class="btn-street" onclick="executeStreet('turn')">Turn</button>
+                    <button class="btn-street" onclick="executeStreet('river')">River</button>
+                </div>
+            </div>
+
+            <div class="table-controls">
+                <button id="btnSetZero">Set Current as 0°</button>
+                <button class="btn-danger" id="btnStop">STOP</button>
+            </div>
+        </section>
+
+        <div class="side-stack">
+            <section class="panel" style="flex: 1; display: flex; flex-direction: column;">
+                <div class="panel-header">
+                    <span class="panel-title">Players & Targets</span>
+                </div>
+
+                <div class="form-group">
+                    <div class="form-label">
+                        <span>Players at Table</span>
+                        <span class="mono" id="playerCountVal" style="color: var(--amber-primary); font-size: 14px;">4</span>
+                    </div>
+                    <div class="counter-row">
+                        <button class="btn-qty" onclick="changePlayerCount(-1)">−</button>
+                        <span class="mono" id="playerCountText" style="font-size: 13px;">4 Players</span>
+                        <button class="btn-qty" onclick="changePlayerCount(1)">+</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="form-label">Poker Table Targets</div>
+                    <div class="poker-toggles">
+                        <button id="btnToggleBurn" class="btn-toggle-active" onclick="togglePokerTarget('burn')">Burn Card</button>
+                        <button id="btnToggleBoard" class="btn-toggle-active" onclick="togglePokerTarget('board')">Board Cards</button>
+                    </div>
+                </div>
+
+                <div class="player-list" id="targetListContainer"></div>
+
+                <div style="padding: 16px 20px; margin-top: auto; border-top: 1px solid rgba(255, 255, 255, 0.05);">
+                    <button class="btn-primary" id="btnDealCustom" style="width: 100%; height: 50px; font-size: 14px;">
+                        Deal from List Above
+                    </button>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Event Log</span>
+                    <button onclick="document.getElementById('terminalLog').innerHTML=''" style="padding: 4px 10px; font-size: 10px; border-radius: 10px;">Clear</button>
+                </div>
+                <div class="terminal-box" id="terminalLog"></div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        const STEPS_PER_REV = 4096;
+        let targets = [];
+        let currentTurretStep = 0;
+        let draggingIndex = null;
+        let numPlayers = 4;
+        let hasBurn = true;
+        let hasBoard = true;
+
+        const canvas = document.getElementById('tableCanvas');
+        const ctx = canvas.getContext('2d');
+        const targetListContainer = document.getElementById('targetListContainer');
+        const terminalLog = document.getElementById('terminalLog');
+        const turretTracker = document.getElementById('turretTracker');
+
+        function log(msg) {
+            const now = new Date();
+            const time = now.toTimeString().split(' ')[0];
+            const div = document.createElement('div');
+            div.style.marginBottom = '2px';
+            div.innerHTML = `<span style="color:var(--text-muted)">[${time}]</span> ${msg}`;
+            terminalLog.appendChild(div);
+            terminalLog.scrollTop = terminalLog.scrollHeight;
+        }
+
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.resetTransform();
+            ctx.scale(dpr, dpr);
+            draw();
+        }
+
+        function buildTargets() {
+            targets = [];
+            for (let i = 0; i < numPlayers; i++) {
+                let deg = Math.round((360 / numPlayers) * i);
+                targets.push({
+                    type: 'player',
+                    id: i + 1,
+                    label: `P${i + 1}`,
+                    deg: deg,
+                    steps: Math.round((deg / 360) * STEPS_PER_REV),
+                    cards: 2
+                });
+            }
+
+            if (hasBurn) {
+                const burnDeg = 330;
+                targets.push({
+                    type: 'burn',
+                    id: 'burn',
+                    label: 'B',
+                    deg: burnDeg,
+                    steps: Math.round((burnDeg / 360) * STEPS_PER_REV),
+                    cards: 1
+                });
+            }
+
+            if (hasBoard) {
+                const boardDeg = 30;
+                targets.push({
+                    type: 'board',
+                    id: 'board',
+                    label: 'BRD',
+                    deg: boardDeg,
+                    steps: Math.round((boardDeg / 360) * STEPS_PER_REV),
+                    cards: 3
+                });
+            }
+
+            renderTargetList();
+            draw();
+        }
+
+        function renderTargetList() {
+            targetListContainer.innerHTML = '';
+            targets.forEach((t, idx) => {
+                const row = document.createElement('div');
+                row.className = 'player-row';
+                let badgeClass = t.type === 'burn' ? 'player-badge burn' : (t.type === 'board' ? 'player-badge board' : 'player-badge');
+                let name = t.type === 'burn' ? 'Burn Card' : (t.type === 'board' ? 'Table Board' : `Player ${t.id}`);
+
+                row.innerHTML = `
+                    <div class="${badgeClass}">${t.label}</div>
+                    <div style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${name}</div>
+                    <div class="custom-card-qty">
+                        <button class="btn-mini" onclick="modCards(${idx}, -1)">−</button>
+                        <span class="mono" style="font-size:12px; width:16px; text-align:center;">${t.cards}</span>
+                        <button class="btn-mini" onclick="modCards(${idx}, 1)">+</button>
+                    </div>
+                    <button class="btn-fire" onclick="singleShot(${idx})">Aim</button>
+                `;
+                targetListContainer.appendChild(row);
+            });
+        }
+
+        window.modCards = function(idx, delta) {
+            targets[idx].cards = Math.max(0, targets[idx].cards + delta);
+            renderTargetList();
+        };
+
+        window.changePlayerCount = function(delta) {
+            numPlayers = Math.min(8, Math.max(2, numPlayers + delta));
+            document.getElementById('playerCountVal').innerText = numPlayers;
+            document.getElementById('playerCountText').innerText = `${numPlayers} Players`;
+            buildTargets();
+            log(`Set ${numPlayers} players`);
+        };
+
+        window.togglePokerTarget = function(type) {
+            if (type === 'burn') {
+                hasBurn = !hasBurn;
+                document.getElementById('btnToggleBurn').className = hasBurn ? 'btn-toggle-active' : '';
+            } else {
+                hasBoard = !hasBoard;
+                document.getElementById('btnToggleBoard').className = hasBoard ? 'btn-toggle-active' : '';
+            }
+            buildTargets();
+        };
+
+        function draw() {
+            const w = canvas.getBoundingClientRect().width;
+            const h = canvas.getBoundingClientRect().height;
+            if (w === 0 || h === 0) return;
+
+            const cx = w / 2;
+            const cy = h / 2;
+            const r = Math.min(cx, cy) - 28;
+
+            ctx.clearRect(0, 0, w, h);
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.arc(cx, cy, r * 0.66, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
+            ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
+            ctx.stroke();
+
+            const radTurret = (currentTurretStep / STEPS_PER_REV) * Math.PI * 2 - Math.PI / 2 + Math.PI;
+            ctx.strokeStyle = '#ff9f0a';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(radTurret) * (r * 0.9), cy + Math.sin(radTurret) * (r * 0.9));
+            ctx.stroke();
+
+            ctx.fillStyle = '#ff9f0a';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            targets.forEach((t, i) => {
+                const rad = (t.deg * Math.PI / 180) - Math.PI / 2 + Math.PI;
+                const px = cx + Math.cos(rad) * r;
+                const py = cy + Math.sin(rad) * r;
+
+                let color = t.type === 'burn' ? '#bf5af2' : (t.type === 'board' ? '#64d2ff' : '#ff9f0a');
+
+                ctx.fillStyle = '#1c1c1e';
+                ctx.beginPath();
+                ctx.arc(px, py, 14, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(px, py, 14, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.fillStyle = color;
+                ctx.font = 'bold 10px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(t.label, px, py);
+            });
+        }
+
+        function getPointerPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+
+        canvas.addEventListener('pointerdown', (e) => {
+            canvas.setPointerCapture(e.pointerId);
+            const pos = getPointerPos(e);
+            const w = canvas.getBoundingClientRect().width;
+            const h = canvas.getBoundingClientRect().height;
+            const cx = w / 2;
+            const cy = h / 2;
+            const r = Math.min(cx, cy) - 28;
+
+            targets.forEach((t, idx) => {
+                const rad = (t.deg * Math.PI / 180) - Math.PI / 2 + Math.PI;
+                const px = cx + Math.cos(rad) * r;
+                const py = cy + Math.sin(rad) * r;
+                if (Math.hypot(pos.x - px, pos.y - py) < 24) {
+                    draggingIndex = idx;
+                }
+            });
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            if (draggingIndex === null) return;
+            const pos = getPointerPos(e);
+            const w = canvas.getBoundingClientRect().width;
+            const h = canvas.getBoundingClientRect().height;
+            const dx = pos.x - (w / 2);
+            const dy = pos.y - (h / 2);
+
+            let rad = Math.atan2(dy, dx) + Math.PI / 2 - Math.PI;
+            if (rad < 0) rad += Math.PI * 2;
+
+            let deg = Math.round(rad * (180 / Math.PI)) % 360;
+            if (deg < 0) deg += 360;
+            targets[draggingIndex].deg = deg;
+            targets[draggingIndex].steps = Math.round((deg / 360) * STEPS_PER_REV);
+
+            draw();
+        });
+
+        canvas.addEventListener('pointerup', (e) => {
+            if (draggingIndex !== null) {
+                log(`Set ${targets[draggingIndex].label} to ${targets[draggingIndex].deg}°`);
+                draggingIndex = null;
+            }
+        });
+
+        async function sendESP(endpoint, payload) {
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: AbortSignal.timeout(2000)
+                });
+                return await res.json();
+            } catch (err) {
+                log('[Simulation mode] ESP32 not connected');
+                return null;
+            }
+        }
+
+        window.singleShot = async function(idx) {
+            const t = targets[idx];
+            log(`Aiming at ${t.label} (${t.deg}°)...`);
+            currentTurretStep = t.steps;
+            turretTracker.innerText = `${t.deg}° / ${t.steps} steps`;
+            draw();
+
+            await sendESP('/api/move', { target_steps: t.steps });
+        };
+
+        window.executeStreet = async function(street) {
+            let seq = [];
+            if (street === 'preflop') {
+                log('=== PRE-FLOP (2 cards per player) ===');
+                const plist = targets.filter(x => x.type === 'player');
+                plist.forEach(p => seq.push({ steps: p.steps, cards: 2 }));
+            } else if (street === 'flop') {
+                log('=== FLOP (1 Burn + 3 Board) ===');
+                const burn = targets.find(x => x.type === 'burn');
+                const board = targets.find(x => x.type === 'board');
+                if (burn) seq.push({ steps: burn.steps, cards: 1 });
+                if (board) seq.push({ steps: board.steps, cards: 3 });
+            } else if (street === 'turn' || street === 'river') {
+                log(`=== ${street.toUpperCase()} (1 Burn + 1 Board) ===`);
+                const burn = targets.find(x => x.type === 'burn');
+                const board = targets.find(x => x.type === 'board');
+                if (burn) seq.push({ steps: burn.steps, cards: 1 });
+                if (board) seq.push({ steps: board.steps, cards: 1 });
+            }
+
+            if (seq.length > 0) {
+                await sendESP('/api/deal', { return_to_zero: false, targets: seq });
+            }
+        };
+
+        document.getElementById('btnDealCustom').addEventListener('click', async () => {
+            const activeTargets = targets.filter(t => t.cards > 0).map(t => ({
+                steps: t.steps,
+                cards: t.cards
+            }));
+            log(`Executing sequence (${activeTargets.length} targets)...`);
+            await sendESP('/api/deal', {
+                return_to_zero: true,
+                targets: activeTargets
+            });
+        });
+
+        document.getElementById('btnSetZero').addEventListener('click', () => {
+            currentTurretStep = 0;
+            turretTracker.innerText = `0° / 0 steps`;
+            draw();
+            log('Calibrated zero position (0°)');
+            sendESP('/api/zero', {});
+        });
+
+        document.getElementById('btnStop').addEventListener('click', () => {
+            log('EMERGENCY STOP SENT!');
+            sendESP('/api/stop', {});
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+
+        document.addEventListener('DOMContentLoaded', () => {
+            buildTargets();
+            setTimeout(resizeCanvas, 50);
+        });
+        setTimeout(resizeCanvas, 200);
+    </script>
+</body>
+</html>
